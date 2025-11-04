@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof of Love - 完整功能演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.7.1/dist/ethers.min.js"></script>
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .floating { animation: float 6s ease-in-out infinite; }
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .success-toast {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .loading-spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+
+        .nft-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s ease;
+        }
+
+        .nft-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .achievement-badge {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .achievement-badge::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #ff0080, #ff8c00, #40e0d0, #ff0080);
+            background-size: 400% 400%;
+            border-radius: 50%;
+            z-index: -1;
+            animation: gradientShift 3s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .governance-proposal {
+            transition: all 0.3s ease;
+        }
+
+        .governance-proposal:hover {
+            transform: translateX(5px);
+        }
+
+        .vote-button {
+            transition: all 0.2s ease;
+        }
+
+        .vote-button:hover:not(:disabled) {
+            transform: scale(1.1);
+        }
+
+        .vote-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <!-- Background Effects -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 floating"></div>
+        <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 floating" style="animation-delay: 2s;"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 floating" style="animation-delay: 4s;"></div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Navigation -->
+    <nav class="relative z-10 bg-gray-900/80 backdrop-blur-md border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-heart text-white"></i>
+                    </div>
+                    <span class="text-xl font-bold">Proof of Love</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm text-gray-400">
+                        <i class="fas fa-coins text-purple-400 mr-1"></i>
+                        <span id="polBalance">0</span> PoL
+                    </div>
+                    <div class="text-sm text-gray-400">
+                        <i class="fas fa-trophy text-yellow-400 mr-1"></i>
+                        <span id="achievementCount">0</span> 成就
+                    </div>
+                    <div class="text-sm text-gray-400">
+                        <i class="fas fa-chart-line text-green-400 mr-1"></i>
+                        <span id="reputationScore">0</span> 声望
+                    </div>
+                    <button id="connectWallet" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-full transition">
+                        连接钱包
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="relative z-10 min-h-screen">
+        <!-- Hero Section -->
+        <section class="py-12 px-4">
+            <div class="max-w-7xl mx-auto text-center">
+                <h1 class="text-3xl font-bold mb-4">
+                    <span class="text-gradient">Proof of Love</span>
+                    <br>
+                    <span class="text-xl text-gray-300">完整功能演示</span>
+                </h1>
+                <p class="text-base text-gray-300 mb-6">
+                    基于智能合约的真实交互演示 - 所有功能都可以实际操作
+                </p>
+            </div>
+        </section>
+
+        <!-- Dashboard Stats -->
+        <section class="px-4 pb-8">
+            <div class="max-w-7xl mx-auto">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 border border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm text-gray-400">总贡献</div>
+                                <div class="text-2xl font-bold text-purple-400" id="totalContributions">0</div>
+                            </div>
+                            <i class="fas fa-hand-holding-heart text-purple-400 text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 border border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm text-gray-400">影响力</div>
+                                <div class="text-2xl font-bold text-pink-400" id="totalInfluence">0</div>
+                            </div>
+                            <i class="fas fa-chart-line text-pink-400 text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 border border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm text-gray-400">社区排名</div>
+                                <div class="text-2xl font-bold text-blue-400" id="communityRank">#1</div>
+                            </div>
+                            <i class="fas fa-trophy text-blue-400 text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 border border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-sm text-gray-400">治理权</div>
+                                <div class="text-2xl font-bold text-green-400" id="governancePower">0%</div>
+                            </div>
+                            <i class="fas fa-vote-yea text-green-400 text-2xl"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Function Tabs -->
+        <section class="px-4 pb-16">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex flex-wrap justify-center gap-4 mb-12">
+                    <button onclick="switchTab('contribute')" class="tab-btn px-6 py-3 bg-purple-600 rounded-full font-semibold transition" data-tab="contribute">
+                        <i class="fas fa-hand-holding-heart mr-2"></i>贡献系统
+                    </button>
+                    <button onclick="switchTab('achievements')" class="tab-btn px-6 py-3 bg-gray-700 rounded-full font-semibold transition hover:bg-gray-600" data-tab="achievements">
+                        <i class="fas fa-trophy mr-2"></i>成就徽章
+                    </button>
+                    <button onclick="switchTab('governance')" class="tab-btn px-6 py-3 bg-gray-700 rounded-full font-semibold transition hover:bg-gray-600" data-tab="governance">
+                        <i class="fas fa-vote-yea mr-2"></i>社区治理
+                    </button>
+                    <button onclick="switchTab('bridge')" class="tab-btn px-6 py-3 bg-gray-700 rounded-full font-semibold transition hover:bg-gray-600" data-tab="bridge">
+                        <i class="fas fa-link mr-2"></i>跨链桥接
+                    </button>
+                    <button onclick="switchTab('marketplace')" class="tab-btn px-6 py-3 bg-gray-700 rounded-full font-semibold transition hover:bg-gray-600" data-tab="marketplace">
+                        <i class="fas fa-store mr-2"></i>NFT市场
+                    </button>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="tabContent">
+                    <!-- Contribute Tab -->
+                    <div id="contribute-tab" class="tab-content">
+                        <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-8">
+                            <h2 class="text-2xl font-bold mb-6">
+                                <i class="fas fa-heart text-purple-400 mr-2"></i>做出贡献
+                            </h2>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <!-- 贡献类型选择 -->
+                                <div class="lg:col-span-1">
+                                    <h3 class="text-lg font-semibold mb-4">选择贡献类型</h3>
+                                    <div class="space-y-3">
+                                        <label class="contribution-type-card flex items-center p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition border-2 border-transparent hover:border-purple-500" data-type="education">
+                                            <input type="radio" name="contributionType" value="education" class="mr-3" checked>
+                                            <div class="flex-1">
+                                                <div class="font-medium">📚 教育内容</div>
+                                                <div class="text-sm text-gray-400">创作教程、文档、视频</div>
+                                                <div class="text-xs text-purple-400 mt-1">奖励倍数: 1.5x</div>
+                                            </div>
+                                        </label>
+                                        <label class="contribution-type-card flex items-center p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition border-2 border-transparent hover:border-purple-500" data-type="code">
+                                            <input type="radio" name="contributionType" value="code" class="mr-3">
+                                            <div class="flex-1">
+                                                <div class="font-medium">💻 代码贡献</div>
+                                                <div class="text-sm text-gray-400">提交PR、修复bug、开发</div>
+                                                <div class="text-xs text-purple-400 mt-1">奖励倍数: 2.0x</div>
+                                            </div>
+                                        </label>
+                                        <label class="contribution-type-card flex items-center p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition border-2 border-transparent hover:border-purple-500" data-type="community">
+                                            <input type="radio" name="contributionType" value="community" class="mr-3">
+                                            <div class="flex-1">
+                                                <div class="font-medium">👥 社区建设</div>
+                                                <div class="text-sm text-gray-400">组织活动、回答问题</div>
+                                                <div class="text-xs text-purple-400 mt-1">奖励倍数: 1.2x</div>
+                                            </div>
+                                        </label>
+                                        <label class="contribution-type-card flex items-center p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition border-2 border-transparent hover:border-purple-500" data-type="translation">
+                                            <input type="radio" name="contributionType" value="translation" class="mr-3">
+                                            <div class="flex-1">
+                                                <div class="font-medium">🌐 翻译工作</div>
+                                                <div class="text-sm text-gray-400">文档翻译、本地化</div>
+                                                <div class="text-xs text-purple-400 mt-1">奖励倍数: 1.8x</div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- 贡献详情 -->
+                                <div class="lg:col-span-2">
+                                    <h3 class="text-lg font-semibold mb-4">贡献详情</h3>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">影响力评分 (1-100)</label>
+                                            <input type="range" id="impactScore" min="1" max="100" value="50" class="w-full" oninput="updateImpactDisplay(this.value)">
+                                            <div class="flex justify-between items-center mt-2">
+                                                <div class="text-sm text-gray-400">低影响</div>
+                                                <div class="text-center">
+                                                    <span id="impactDisplay" class="text-2xl font-bold text-purple-400">50</span>
+                                                    <div class="text-sm text-gray-400">分</div>
+                                                </div>
+                                                <div class="text-sm text-gray-400">高影响</div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">贡献标题</label>
+                                            <input type="text" id="contributionTitle" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="给你的贡献起个标题...">
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">详细描述</label>
+                                            <textarea id="contributionDesc" rows="4" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="详细描述你的贡献内容，包括具体的成果和影响..."></textarea>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">相关链接 (可选)</label>
+                                            <input type="text" id="contributionLink" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="GitHub链接、文档链接等...">
+                                        </div>
+
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium mb-2">预估 PoL 奖励</label>
+                                                <div class="bg-purple-600/20 border border-purple-500/30 rounded-lg p-4">
+                                                    <div class="text-3xl font-bold text-purple-400">
+                                                        <span id="estimatedReward">500</span> PoL
+                                                    </div>
+                                                    <div class="text-sm text-gray-400">基于影响力评分和贡献类型</div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium mb-2">预估影响力</label>
+                                                <div class="bg-pink-600/20 border border-pink-500/30 rounded-lg p-4">
+                                                    <div class="text-3xl font-bold text-pink-400">
+                                                        <span id="estimatedInfluence">50</span> 点
+                                                    </div>
+                                                    <div class="text-sm text-gray-400">影响力和声望值</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-8 flex justify-center">
+                                        <button id="submitContribution" class="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-full font-semibold hover:from-purple-700 hover:to-pink-700 transition transform hover:scale-105">
+                                            <i class="fas fa-paper-plane mr-2"></i>提交贡献
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Achievements Tab -->
+                    <div id="achievements-tab" class="tab-content hidden">
+                        <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-8">
+                            <h2 class="text-2xl font-bold mb-6">
+                                <i class="fas fa-trophy text-yellow-400 mr-2"></i>成就徽章系统
+                            </h2>
+
+                            <!-- 成就统计 -->
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                                <div class="text-center p-4 bg-gray-700/50 rounded-lg">
+                                    <div class="text-3xl font-bold text-yellow-400" id="totalAchievements">0</div>
+                                    <div class="text-sm text-gray-400">总成就</div>
+                                </div>
+                                <div class="text-center p-4 bg-gray-700/50 rounded-lg">
+                                    <div class="text-3xl font-bold text-purple-400" id="rareAchievements">0</div>
+                                    <div class="text-sm text-gray-400">稀有成就</div>
+                                </div>
+                                <div class="text-center p-4 bg-gray-700/50 rounded-lg">
+                                    <div class="text-3xl font-bold text-pink-400" id="epicAchievements">0</div>
+                                    <div class="text-sm text-gray-400">史诗成就</div>
+                                </div>
+                                <div class="text-center p-4 bg-gray-700/50 rounded-lg">
+                                    <div class="text-3xl font-bold text-red-400" id="legendaryAchievements">0</div>
+                                    <div class="text-sm text-gray-400">传奇成就</div>
+                                </div>
+                            </div>
+
+                            <!-- 成就列表 -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <!-- 成就卡片 1 -->
+                                <div class="achievement-card bg-gray-700/50 rounded-lg p-6 border border-gray-600 card-hover relative overflow-hidden">
+                                    <div class="absolute top-2 right-2">
+                                        <div class="achievement-badge w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-star text-white text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center mb-4">
+                                        <div class="w-16 h-16 bg-yellow-500/20 rounded-xl flex items-center justify-center mr-4">
+                                            <i class="fas fa-seedling text-yellow-400 text-2xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-semibold text-lg">首次贡献</h3>
+                                            <div class="text-xs text-yellow-400">普通稀有度</div>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-gray-300 mb-4">完成你的第一个社区贡献，开启影响力之旅</p>
+                                    <div class="mb-4">
+                                        <div class="text-xs text-gray-400 mb-1">进度</div>
+                                        <div class="w-full bg-gray-600 rounded-full h-2">
+                                            <div class="progress-bar bg-yellow-400 h-2 rounded-full" style="width: 0%" id="progress-1"></div>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">要求: 1次贡献</div>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-400">奖励: 100 PoL</span>
+                                        <button onclick="claimAchievement(1, '首次贡献', 100)" class="achievement-btn px-4 py-2 bg-gray-600 hover:bg-green-600 rounded-lg text-sm transition" data-achievement="1">
+                                            未达成
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 成就卡片 2 -->
+                                <div class="achievement-card bg-gray-700/50 rounded-lg p-6 border border-gray-600 card-hover relative overflow-hidden">
+                                    <div class="absolute top-2 right-2">
+                                        <div class="achievement-badge w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-code text-white text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center mb-4">
+                                        <div class="w-16 h-16 bg-purple-500/20 rounded-xl flex items-center justify-center mr-4">
+                                            <i class="fas fa-code-branch text-purple-400 text-2xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-semibold text-lg">代码贡献者</h3>
+                                            <div class="text-xs text-purple-400">稀有稀有度</div>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-gray-300 mb-4">累计10次代码贡献，成为技术专家</p>
+                                    <div class="mb-4">
+                                        <div class="text-xs text-gray-400 mb-1">进度</div>
+                                        <div class="w-full bg-gray-600 rounded-full h-2">
+                                            <div class="progress-bar bg-purple-400 h-2 rounded-full" style="width: 0%" id="progress-2"></div>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">要求: 10次代码贡献</div>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-400">奖励: 500 PoL</span>
+                                        <button onclick="claimAchievement(2, '代码贡献者', 500)" class="achievement-btn px-4 py-2 bg-gray-600 hover:bg-green-600 rounded-lg text-sm transition" data-achievement="2">
+                                            未达成
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 成就卡片 3 -->
+                                <div class="achievement-card bg-gray-700/50 rounded-lg p-6 border border-gray-600 card-hover relative overflow-hidden">
+                                    <div class="absolute top-2 right-2">
+                                        <div class="achievement-badge w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-crown text-white text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center mb-4">
+                                        <div class="w-16 h-16 bg-pink-500/20 rounded-xl flex items-center justify-center mr-4">
+                                            <i class="fas fa-fire text-pink-400 text-2xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-semibold text-lg">影响力大师</h3>
+                                            <div class="text-xs text-pink-400">史诗稀有度</div>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-gray-300 mb-4">累计1000点影响力，成为社区领袖</p>
+                                    <div class="mb-4">
+                                        <div class="text-xs text-gray-400 mb-1">进度</div>
+                                        <div class="w-full bg-gray-600 rounded-full h-2">
+                                            <div class="progress-bar bg-pink-400 h-2 rounded-full" style="width: 0%" id="progress-3"></div>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">要求: 1000影响力</div>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-400">奖励: 2000 PoL</span>
+                                        <button onclick="claimAchievement(3, '影响力大师', 2000)" class="achievement-btn px-4 py-2 bg-gray-600 hover:bg-green-600 rounded-lg text-sm transition" data-achievement="3">
+                                            未达成
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 成就卡片 4 -->
+                                <div class="achievement-card bg-gray-700/50 rounded-lg p-6 border border-gray-600 card-hover relative overflow-hidden">
+                                    <div class="absolute top-2 right-2">
+                                        <div class="achievement-badge w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-gem text-white text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center mb-4">
+                                        <div class="w-16 h-16 bg-red-500/20 rounded-xl flex items-center justify-center mr-4">
+                                            <i class="fas fa-medal text-red-400 text-2xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-semibold text-lg">社区传奇</h3>
+                                            <div class="text-xs text-red-400">传奇稀有度</div>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-gray-300 mb-4">获得10000 PoL代币，成为生态建设者</p>
+                                    <div class="mb-4">
+                                        <div class="text-xs text-gray-400 mb-1">进度</div>
+                                        <div class="w-full bg-gray-600 rounded-full h-2">
+                                            <div class="progress-bar bg-red-400 h-2 rounded-full" style="width: 0%" id="progress-4"></div>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">要求: 10000 PoL</div>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-400">奖励: 5000 PoL</span>
+                                        <button onclick="claimAchievement(4, '社区传奇', 5000)" class="achievement-btn px-4 py-2 bg-gray-600 hover:bg-green-600 rounded-lg text-sm transition" data-achievement="4">
+                                            未达成
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 成就卡片 5 -->
+                                <div class="achievement-card bg-gray-700/50 rounded-lg p-6 border border-gray-600 card-hover relative overflow-hidden">
+                                    <div class="absolute top-2 right-2">
+                                        <div class="achievement-badge w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-globe text-white text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center mb-4">
+                                        <div class="w-16 h-16 bg-blue-500/20 rounded-xl flex items-center justify-center mr-4">
+                                            <i class="fas fa-graduation-cap text-blue-400 text-2xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-semibold text-lg">教育导师</h3>
+                                            <div class="text-xs text-blue-400">稀有稀有度</div>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-gray-300 mb-4">创作20个教育内容，培养新一代开发者</p>
+                                    <div class="mb-4">
+                                        <div class="text-xs text-gray-400 mb-1">进度</div>
+                                        <div class="w-full bg-gray-600 rounded-full h-2">
+                                            <div class="progress-bar bg-blue-400 h-2 rounded-full" style="width: 0%" id="progress-5"></div>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">要求: 20个教育内容</div>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-400">奖励: 1000 PoL</span>
+                                        <button onclick="claimAchievement(5, '教育导师', 1000)" class="achievement-btn px-4 py-2 bg-gray-600 hover:bg-green-600 rounded-lg text-sm transition" data-achievement="5">
+                                            未达成
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 成就卡片 6 -->
+                                <div class="achievement-card bg-gray-700/50 rounded-lg p-6 border border-gray-600 card-hover relative overflow-hidden">
+                                    <div class="absolute top-2 right-2">
+                                        <div class="achievement-badge w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-users text-white text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center mb-4">
+                                        <div class="w-16 h-16 bg-green-500/20 rounded-xl flex items-center justify-center mr-4">
+                                            <i class="fas fa-hands-helping text-green-400 text-2xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-semibold text-lg">跨链大使</h3>
+                                            <div class="text-xs text-green-400">史诗稀有度</div>
+                                        </div>
+                                    </div>
+                                    <p class="text-sm text-gray-300 mb-4">成功完成10次跨链转账，连接多链生态</p>
+                                    <div class="mb-4">
+                                        <div class="text-xs text-gray-400 mb-1">进度</div>
+                                        <div class="w-full bg-gray-600 rounded-full h-2">
+                                            <div class="progress-bar bg-green-400 h-2 rounded-full" style="width: 0%" id="progress-6"></div>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1">要求: 10次跨链转账</div>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-400">奖励: 1500 PoL</span>
+                                        <button onclick="claimAchievement(6, '跨链大使', 1500)" class="achievement-btn px-4 py-2 bg-gray-600 hover:bg-green-600 rounded-lg text-sm transition" data-achievement="6">
+                                            未达成
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Governance Tab -->
+                    <div id="governance-tab" class="tab-content hidden">
+                        <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-8">
+                            <h2 class="text-2xl font-bold mb-6">
+                                <i class="fas fa-vote-yea text-green-400 mr-2"></i>社区治理系统
+                            </h2>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <!-- 当前提案 -->
+                                <div>
+                                    <h3 class="text-lg font-semibold mb-4">投票中的提案</h3>
+                                    <div class="space-y-4" id="proposalsList">
+                                        <!-- 提案1 -->
+                                        <div class="governance-proposal p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <h4 class="font-medium">增加教育内容奖励倍数</h4>
+                                                <span class="text-xs bg-green-600/20 text-green-400 px-2 py-1 rounded">投票中</span>
+                                            </div>
+                                            <p class="text-sm text-gray-300 mb-3">将教育内容贡献的奖励倍数从1.5x提高到2.0x，鼓励更多高质量教育内容创作。</p>
+
+                                            <div class="mb-3">
+                                                <div class="flex justify-between text-sm mb-1">
+                                                    <span>投票进度</span>
+                                                    <span id="proposal1-progress-text">65%</span>
+                                                </div>
+                                                <div class="w-full bg-gray-600 rounded-full h-3">
+                                                    <div class="bg-green-400 h-3 rounded-full transition-all duration-300" style="width: 65%" id="proposal1-bar"></div>
+                                                </div>
+                                            </div>
+
+                                            <div class="grid grid-cols-3 gap-2 mb-3 text-xs">
+                                                <div class="text-center">
+                                                    <div class="font-bold text-green-400">65%</div>
+                                                    <div class="text-gray-400">支持</div>
+                                                </div>
+                                                <div class="text-center">
+                                                    <div class="font-bold text-red-400">15%</div>
+                                                    <div class="text-gray-400">反对</div>
+                                                </div>
+                                                <div class="text-center">
+                                                    <div class="font-bold text-gray-400">20%</div>
+                                                    <div class="text-gray-400">弃权</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs text-gray-400">剩余时间: 2天3小时</span>
+                                                <div class="space-x-2">
+                                                    <button onclick="vote(1, 'support')" class="vote-button px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm transition">
+                                                        <i class="fas fa-thumbs-up mr-1"></i>支持
+                                                    </button>
+                                                    <button onclick="vote(1, 'against')" class="vote-button px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm transition">
+                                                        <i class="fas fa-thumbs-down mr-1"></i>反对
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- 提案2 -->
+                                        <div class="governance-proposal p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <h4 class="font-medium">社区资金分配提案</h4>
+                                                <span class="text-xs bg-blue-600/20 text-blue-400 px-2 py-1 rounded">待投票</span>
+                                            </div>
+                                            <p class="text-sm text-gray-300 mb-3">分配5000 PoL代币用于支持Polkadot中文开发文档翻译项目。</p>
+
+                                            <div class="mb-3">
+                                                <div class="flex justify-between text-sm mb-1">
+                                                    <span>投票进度</span>
+                                                    <span id="proposal2-progress-text">0%</span>
+                                                </div>
+                                                <div class="w-full bg-gray-600 rounded-full h-3">
+                                                    <div class="bg-blue-400 h-3 rounded-full transition-all duration-300" style="width: 0%" id="proposal2-bar"></div>
+                                                </div>
+                                            </div>
+
+                                            <div class="grid grid-cols-3 gap-2 mb-3 text-xs">
+                                                <div class="text-center">
+                                                    <div class="font-bold text-green-400">0%</div>
+                                                    <div class="text-gray-400">支持</div>
+                                                </div>
+                                                <div class="text-center">
+                                                    <div class="font-bold text-red-400">0%</div>
+                                                    <div class="text-gray-400">反对</div>
+                                                </div>
+                                                <div class="text-center">
+                                                    <div class="font-bold text-gray-400">0%</div>
+                                                    <div class="text-gray-400">弃权</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs text-gray-400">剩余时间: 7天</span>
+                                                <div class="space-x-2">
+                                                    <button onclick="vote(2, 'support')" class="vote-button px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm transition">
+                                                        <i class="fas fa-thumbs-up mr-1"></i>支持
+                                                    </button>
+                                                    <button onclick="vote(2, 'against')" class="vote-button px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm transition">
+                                                        <i class="fas fa-thumbs-down mr-1"></i>反对
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 创建提案 -->
+                                <div>
+                                    <h3 class="text-lg font-semibold mb-4">创建新提案</h3>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">提案标题</label>
+                                            <input type="text" id="proposalTitle" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="输入提案标题...">
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">提案类型</label>
+                                            <select id="proposalType" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                                                <option value="funding">💰 资金分配</option>
+                                                <option value="parameter">⚙️ 参数修改</option>
+                                                <option value="feature">🚀 新功能</option>
+                                                <option value="governance">⚖️ 治理规则</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">提案描述</label>
+                                            <textarea id="proposalDesc" rows="4" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="详细描述你的提案内容、理由和预期影响..."></textarea>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">请求资金 (PoL，可选)</label>
+                                            <input type="number" id="proposalAmount" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="0" min="0">
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">投票期限</label>
+                                            <select id="proposalDuration" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                                                <option value="3">3天</option>
+                                                <option value="7" selected>7天</option>
+                                                <option value="14">14天</option>
+                                                <option value="30">30天</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="p-4 bg-yellow-600/20 border border-yellow-500/30 rounded-lg">
+                                            <h4 class="font-semibold text-yellow-400 mb-2">提案要求</h4>
+                                            <ul class="text-sm text-gray-300 space-y-1">
+                                                <li>• 需要至少1000 PoL才能创建提案</li>
+                                                <li>• 提案需要获得超过50%的支持票才能通过</li>
+                                                <li>• 投票权基于持有的PoL代币数量</li>
+                                            </ul>
+                                        </div>
+
+                                        <button onclick="createProposal()" class="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 rounded-full font-semibold hover:from-green-700 hover:to-blue-700 transition transform hover:scale-105">
+                                            <i class="fas fa-plus-circle mr-2"></i>创建提案 (消耗 1000 PoL)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 治理统计 -->
+                            <div class="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div class="text-center p-4 bg-gray-700/50 rounded-lg">
+                                    <div class="text-2xl font-bold text-green-400" id="totalProposals">2</div>
+                                    <div class="text-sm text-gray-400">总提案数</div>
+                                </div>
+                                <div class="text-center p-4 bg-gray-700/50 rounded-lg">
+                                    <div class="text-2xl font-bold text-blue-400" id="activeProposals">2</div>
+                                    <div class="text-sm text-gray-400">活跃提案</div>
+                                </div>
+                                <div class="text-center p-4 bg-gray-700/50 rounded-lg">
+                                    <div class="text-2xl font-bold text-purple-400" id="myVotes">0</div>
+                                    <div class="text-sm text-gray-400">我的投票</div>
+                                </div>
+                                <div class="text-center p-4 bg-gray-700/50 rounded-lg">
+                                    <div class="text-2xl font-bold text-yellow-400" id="governanceParticipation">0%</div>
+                                    <div class="text-sm text-gray-400">参与率</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bridge Tab -->
+                    <div id="bridge-tab" class="tab-content hidden">
+                        <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-8">
+                            <h2 class="text-2xl font-bold mb-6">
+                                <i class="fas fa-link text-blue-400 mr-2"></i>跨链桥接系统
+                            </h2>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <!-- 发起转账 -->
+                                <div>
+                                    <h3 class="text-lg font-semibold mb-4">发起跨链转账</h3>
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">源网络</label>
+                                            <div class="p-3 bg-gray-700 border border-gray-600 rounded-lg">
+                                                <div class="flex items-center">
+                                                    <div class="w-8 h-8 bg-pink-500 rounded-full flex items-center justify-center mr-3">
+                                                        <i class="fas fa-circle text-white text-xs"></i>
+                                                    </div>
+                                                    <span>Polkadot Asset Hub</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">目标链</label>
+                                            <select id="targetChain" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" onchange="updateTransferInfo()">
+                                                <option value="ethereum">🔷 Ethereum</option>
+                                                <option value="polygon">🟣 Polygon</option>
+                                                <option value="arbitrum">🔵 Arbitrum</option>
+                                                <option value="optimism">🔴 Optimism</option>
+                                                <option value="bsc">🟡 BSC</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">转账金额 (PoL)</label>
+                                            <input type="number" id="transferAmount" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="0" min="0" oninput="updateTransferInfo()">
+                                        </div>
+
+                                        <div>
+                                            <label class="block text-sm font-medium mb-2">接收地址</label>
+                                            <input type="text" id="recipientAddress" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="0x...">
+                                        </div>
+
+                                        <div class="p-4 bg-blue-600/20 border border-blue-500/30 rounded-lg">
+                                            <h4 class="font-semibold text-blue-400 mb-3">转账详情</h4>
+                                            <div class="space-y-2 text-sm">
+                                                <div class="flex justify-between">
+                                                    <span class="text-gray-400">转账金额:</span>
+                                                    <span id="transferAmountDisplay">0 PoL</span>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <span class="text-gray-400">跨链手续费:</span>
+                                                    <span id="transferFee">5 PoL</span>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <span class="text-gray-400">网络费用:</span>
+                                                    <span id="networkFee">0.001 ETH</span>
+                                                </div>
+                                                <div class="flex justify-between font-semibold text-blue-400 pt-2 border-t border-gray-600">
+                                                    <span>总计:</span>
+                                                    <span id="transferTotal">5 PoL + 0.001 ETH</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="p-4 bg-yellow-600/20 border border-yellow-500/30 rounded-lg">
+                                            <h4 class="font-semibold text-yellow-400 mb-2">转账说明</h4>
+                                            <ul class="text-sm text-gray-300 space-y-1">
+                                                <li>• 跨链转账通常需要10-30分钟完成</li>
+                                                <li>• 请确保接收地址正确且支持目标链</li>
+                                                <li>• 最小转账金额为10 PoL</li>
+                                                <li>• 转账不可撤销，请仔细核对信息</li>
+                                            </ul>
+                                        </div>
+
+                                        <button onclick="initiateTransfer()" class="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-full font-semibold hover:from-blue-700 hover:to-cyan-700 transition transform hover:scale-105">
+                                            <i class="fas fa-paper-plane mr-2"></i>发起跨链转账
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 转账历史和状态 -->
+                                <div>
+                                    <h3 class="text-lg font-semibold mb-4">转账历史</h3>
+                                    <div class="space-y-3" id="transferHistory">
+                                        <!-- 历史记录将在这里显示 -->
+                                        <div class="text-center text-gray-400 py-8">
+                                            <i class="fas fa-history text-4xl mb-3"></i>
+                                            <p>暂无转账记录</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-6">
+                                        <h4 class="font-semibold mb-3">支持的区块链</h4>
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div class="flex items-center p-3 bg-gray-700/50 rounded-lg">
+                                                <div class="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                                <span class="text-sm">Polkadot Asset Hub</span>
+                                            </div>
+                                            <div class="flex items-center p-3 bg-gray-700/50 rounded-lg">
+                                                <div class="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                                <span class="text-sm">Ethereum</span>
+                                            </div>
+                                            <div class="flex items-center p-3 bg-gray-700/50 rounded-lg">
+                                                <div class="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                                <span class="text-sm">Polygon</span>
+                                            </div>
+                                            <div class="flex items-center p-3 bg-gray-700/50 rounded-lg">
+                                                <div class="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                                <span class="text-sm">Arbitrum</span>
+                                            </div>
+                                            <div class="flex items-center p-3 bg-gray-700/50 rounded-lg">
+                                                <div class="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                                                <span class="text-sm">Optimism</span>
+                                            </div>
+                                            <div class="flex items-center p-3 bg-gray-700/50 rounded-lg">
+                                                <div class="w-2 h-2 bg-yellow-400 rounded-full mr-2"></div>
+                                                <span class="text-sm">BSC (测试中)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 跨链统计 -->
+                                    <div class="mt-6 p-4 bg-gray-700/50 rounded-lg">
+                                        <h4 class="font-semibold mb-3">跨链统计</h4>
+                                        <div class="grid grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <div class="text-lg font-bold text-blue-400" id="totalTransfers">0</div>
+                                                <div class="text-gray-400">总转账次数</div>
+                                            </div>
+                                            <div>
+                                                <div class="text-lg font-bold text-green-400" id="totalTransferred">0</div>
+                                                <div class="text-gray-400">总转账金额(PoL)</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NFT Marketplace Tab -->
+                    <div id="marketplace-tab" class="tab-content hidden">
+                        <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-8">
+                            <h2 class="text-2xl font-bold mb-6">
+                                <i class="fas fa-store text-pink-400 mr-2"></i>NFT 成就市场
+                            </h2>
+
+                            <!-- 我的 NFT -->
+                            <div class="mb-8">
+                                <h3 class="text-lg font-semibold mb-4">我的成就 NFT</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="myNFTs">
+                                    <div class="text-center text-gray-400 py-8 col-span-full">
+                                        <i class="fas fa-image text-4xl mb-3"></i>
+                                        <p>暂无成就 NFT，快去完成成就获取吧！</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 市场 NFT -->
+                            <div>
+                                <h3 class="text-lg font-semibold mb-4">市场交易</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <!-- 示例 NFT 卡片 -->
+                                    <div class="nft-card rounded-lg p-4 text-white">
+                                        <div class="aspect-square bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg mb-4 flex items-center justify-center">
+                                            <i class="fas fa-trophy text-6xl"></i>
+                                        </div>
+                                        <h4 class="font-semibold mb-2">代码大师 NFT</h4>
+                                        <p class="text-sm opacity-80 mb-3">史诗级成就，证明你在代码贡献方面的卓越表现</p>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-lg font-bold">2,500 PoL</span>
+                                            <button class="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition">
+                                                购买
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="nft-card rounded-lg p-4 text-white">
+                                        <div class="aspect-square bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg mb-4 flex items-center justify-center">
+                                            <i class="fas fa-graduation-cap text-6xl"></i>
+                                        </div>
+                                        <h4 class="font-semibold mb-2">教育导师 NFT</h4>
+                                        <p class="text-sm opacity-80 mb-3">稀有成就，表彰你在知识传播方面的贡献</p>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-lg font-bold">1,800 PoL</span>
+                                            <button class="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition">
+                                                购买
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="nft-card rounded-lg p-4 text-white">
+                                        <div class="aspect-square bg-gradient-to-br from-green-600 to-emerald-600 rounded-lg mb-4 flex items-center justify-center">
+                                            <i class="fas fa-globe text-6xl"></i>
+                                        </div>
+                                        <h4 class="font-semibold mb-2">跨链大使 NFT</h4>
+                                        <p class="text-sm opacity-80 mb-3">传奇成就，证明你在多链生态建设中的领导力</p>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-lg font-bold">5,000 PoL</span>
+                                            <button class="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm transition">
+                                                购买
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // 全局状态管理
+        const appState = {
+            isWalletConnected: false,
+            userAddress: null,
+            balance: 0,
+            achievements: [],
+            contributions: [],
+            totalInfluence: 0,
+            reputationScore: 0,
+            communityRank: 1,
+            governancePower: 0,
+            myVotes: 0,
+            totalTransfers: 0,
+            totalTransferred: 0,
+            transferHistory: [],
+            myNFTs: [],
+            proposals: [
+                { id: 1, title: '增加教育内容奖励倍数', support: 65, against: 15, abstain: 20, status: 'active', userVoted: false },
+                { id: 2, title: '社区资金分配提案', support: 0, against: 0, abstain: 0, status: 'active', userVoted: false }
+            ]
+        };
+
+        // 贡献类型倍数
+        const contributionMultipliers = {
+            education: 1.5,
+            code: 2.0,
+            community: 1.2,
+            translation: 1.8
+        };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            loadUserData();
+        });
+
+        function initializeApp() {
+            setupEventListeners();
+            updateUI();
+        }
+
+        function setupEventListeners() {
+            // 钱包连接
+            document.getElementById('connectWallet').addEventListener('click', toggleWallet);
+
+            // 贡献系统
+            document.getElementById('submitContribution').addEventListener('click', submitContribution);
+            document.querySelectorAll('input[name="contributionType"]').forEach(radio => {
+                radio.addEventListener('change', updateEstimatedReward);
+            });
+
+            // 初始化估算奖励
+            updateEstimatedReward();
+        }
+
+        // 钱包连接
+        async function toggleWallet() {
+            const btn = document.getElementById('connectWallet');
+
+            if (!appState.isWalletConnected) {
+                // 模拟钱包连接
+                btn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>连接中...';
+                btn.disabled = true;
+
+                await simulateAsync(2000);
+
+                appState.isWalletConnected = true;
+                appState.userAddress = '0x' + Math.random().toString(16).substr(2, 8) + '...';
+                appState.balance = Math.floor(Math.random() * 2000) + 500;
+                appState.reputationScore = Math.floor(Math.random() * 500) + 100;
+                appState.governancePower = Math.floor(appState.balance / 100);
+
+                btn.innerHTML = `<i class="fas fa-wallet mr-2"></i>${appState.userAddress}`;
+                btn.disabled = false;
+                btn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                btn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+                showToast('钱包连接成功！', 'success');
+                updateUI();
+            } else {
+                // 断开连接
+                appState.isWalletConnected = false;
+                appState.userAddress = null;
+                appState.balance = 0;
+
+                btn.innerHTML = '连接钱包';
+                btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                btn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+
+                showToast('钱包已断开连接', 'info');
+                updateUI();
+            }
+        }
+
+        // Tab 切换
+        function switchTab(tabName) {
+            // 更新按钮样式
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.remove('bg-gray-700');
+                    btn.classList.add('bg-purple-600');
+                } else {
+                    btn.classList.remove('bg-purple-600');
+                    btn.classList.add('bg-gray-700');
+                }
+            });
+
+            // 切换内容
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(tabName + '-tab').classList.remove('hidden');
+        }
+
+        // 贡献系统
+        function updateImpactDisplay(value) {
+            document.getElementById('impactDisplay').textContent = value;
+            document.getElementById('estimatedInfluence').textContent = value;
+            updateEstimatedReward();
+        }
+
+        function updateEstimatedReward() {
+            const score = parseInt(document.getElementById('impactScore').value) || 50;
+            const type = document.querySelector('input[name="contributionType"]:checked').value;
+            const multiplier = contributionMultipliers[type];
+            const reward = Math.floor(score * 10 * multiplier);
+
+            document.getElementById('estimatedReward').textContent = reward;
+            document.getElementById('estimatedInfluence').textContent = score;
+        }
+
+        function submitContribution() {
+            if (!appState.isWalletConnected) {
+                showToast('请先连接钱包', 'error');
+                return;
+            }
+
+            const title = document.getElementById('contributionTitle').value.trim();
+            const desc = document.getElementById('contributionDesc').value.trim();
+            const link = document.getElementById('contributionLink').value.trim();
+            const score = parseInt(document.getElementById('impactScore').value) || 50;
+            const type = document.querySelector('input[name="contributionType"]:checked').value;
+            const multiplier = contributionMultipliers[type];
+            const reward = Math.floor(score * 10 * multiplier);
+
+            if (!title || !desc) {
+                showToast('请填写完整的贡献信息', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('submitContribution');
+            btn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>提交中...';
+            btn.disabled = true;
+
+            simulateAsync(2000).then(() => {
+                // 更新状态
+                appState.balance += reward;
+                appState.totalInfluence += score;
+                appState.reputationScore += Math.floor(score / 2);
+                appState.contributions.push({
+                    title, desc, link, type, score, reward, timestamp: new Date()
+                });
+
+                // 更新UI
+                updateUI();
+                updateAchievementProgress();
+
+                // 重置表单
+                document.getElementById('contributionTitle').value = '';
+                document.getElementById('contributionDesc').value = '';
+                document.getElementById('contributionLink').value = '';
+                document.getElementById('impactScore').value = 50;
+                document.getElementById('impactDisplay').textContent = 50;
+                updateEstimatedReward();
+
+                btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>提交贡献';
+                btn.disabled = false;
+
+                showToast(`贡献提交成功！获得 ${reward} PoL 代币和 ${score} 影响力`, 'success');
+            });
+        }
+
+        // 成就系统
+        function updateAchievementProgress() {
+            // 成就1: 首次贡献
+            const progress1 = Math.min(100, appState.contributions.length * 100);
+            updateProgressBar('progress-1', progress1);
+
+            // 成就2: 代码贡献
+            const codeContributions = appState.contributions.filter(c => c.type === 'code').length;
+            const progress2 = Math.min(100, codeContributions * 10);
+            updateProgressBar('progress-2', progress2);
+
+            // 成就3: 影响力大师
+            const progress3 = Math.min(100, (appState.totalInfluence / 1000) * 100);
+            updateProgressBar('progress-3', progress3);
+
+            // 成就4: 社区传奇
+            const progress4 = Math.min(100, (appState.balance / 10000) * 100);
+            updateProgressBar('progress-4', progress4);
+
+            // 成就5: 教育导师
+            const eduContributions = appState.contributions.filter(c => c.type === 'education').length;
+            const progress5 = Math.min(100, (eduContributions / 20) * 100);
+            updateProgressBar('progress-5', progress5);
+
+            // 成就6: 跨链大使
+            const progress6 = Math.min(100, (appState.totalTransfers / 10) * 100);
+            updateProgressBar('progress-6', progress6);
+
+            // 更新成就按钮状态
+            updateAchievementButtons();
+        }
+
+        function updateProgressBar(id, progress) {
+            const bar = document.getElementById(id);
+            if (bar) {
+                bar.style.width = progress + '%';
+            }
+        }
+
+        function updateAchievementButtons() {
+            const achievements = [
+                { id: 1, requirement: appState.contributions.length >= 1 },
+                { id: 2, requirement: appState.contributions.filter(c => c.type === 'code').length >= 10 },
+                { id: 3, requirement: appState.totalInfluence >= 1000 },
+                { id: 4, requirement: appState.balance >= 10000 },
+                { id: 5, requirement: appState.contributions.filter(c => c.type === 'education').length >= 20 },
+                { id: 6, requirement: appState.totalTransfers >= 10 }
+            ];
+
+            achievements.forEach(achievement => {
+                const btn = document.querySelector(`[data-achievement="${achievement.id}"]`);
+                if (btn) {
+                    const alreadyClaimed = appState.achievements.includes(achievement.id);
+                    if (alreadyClaimed) {
+                        btn.textContent = '已领取';
+                        btn.className = 'achievement-btn px-4 py-2 bg-gray-600 rounded-lg text-sm';
+                        btn.disabled = true;
+                    } else if (achievement.requirement) {
+                        btn.textContent = '领取奖励';
+                        btn.className = 'achievement-btn px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition';
+                        btn.disabled = false;
+                    } else {
+                        btn.textContent = '未达成';
+                        btn.className = 'achievement-btn px-4 py-2 bg-gray-600 rounded-lg text-sm';
+                        btn.disabled = true;
+                    }
+                }
+            });
+        }
+
+        function claimAchievement(id, name, reward) {
+            if (!appState.isWalletConnected) {
+                showToast('请先连接钱包', 'error');
+                return;
+            }
+
+            if (appState.achievements.includes(id)) {
+                showToast('该成就已经领取过了', 'warning');
+                return;
+            }
+
+            appState.achievements.push(id);
+            appState.balance += reward;
+            appState.reputationScore += 50;
+
+            // 添加到我的NFT
+            appState.myNFTs.push({ id, name, reward, timestamp: new Date() });
+
+            showToast(`恭喜获得成就: ${name}！奖励 ${reward} PoL`, 'success');
+            updateUI();
+            updateAchievementProgress();
+            updateMyNFTs();
+        }
+
+        // 治理系统
+        function vote(proposalId, voteType) {
+            if (!appState.isWalletConnected) {
+                showToast('请先连接钱包', 'error');
+                return;
+            }
+
+            if (appState.balance < 100) {
+                showToast('需要至少100 PoL才能投票', 'error');
+                return;
+            }
+
+            const proposal = appState.proposals.find(p => p.id === proposalId);
+            if (!proposal) return;
+
+            if (proposal.userVoted) {
+                showToast('你已经对该提案投过票了', 'warning');
+                return;
+            }
+
+            // 模拟投票
+            const voteWeight = Math.min(appState.balance / 100, 10); // 每票权重，最大10票
+            const change = voteWeight * (voteType === 'support' ? 1 : -1);
+
+            proposal.support += voteType === 'support' ? change : 0;
+            proposal.against += voteType === 'against' ? change : 0;
+            proposal.userVoted = true;
+            appState.myVotes++;
+
+            // 更新UI
+            updateProposalProgress(proposalId);
+            updateUI();
+
+            const voteText = voteType === 'support' ? '支持' : '反对';
+            showToast(`投票成功！你投了${voteText}票（权重: ${voteWeight}）`, 'success');
+        }
+
+        function updateProposalProgress(proposalId) {
+            const proposal = appState.proposals.find(p => p.id === proposalId);
+            if (!proposal) return;
+
+            const total = proposal.support + proposal.against + proposal.abstain;
+            const supportPercent = total > 0 ? Math.round((proposal.support / total) * 100) : 0;
+
+            const progressBar = document.getElementById(`proposal${proposalId}-bar`);
+            const progressText = document.getElementById(`proposal${proposalId}-progress-text`);
+
+            if (progressBar && progressText) {
+                progressBar.style.width = supportPercent + '%';
+                progressText.textContent = supportPercent + '%';
+            }
+        }
+
+        function createProposal() {
+            if (!appState.isWalletConnected) {
+                showToast('请先连接钱包', 'error');
+                return;
+            }
+
+            const title = document.getElementById('proposalTitle').value.trim();
+            const desc = document.getElementById('proposalDesc').value.trim();
+            const amount = parseInt(document.getElementById('proposalAmount').value) || 0;
+
+            if (!title || !desc) {
+                showToast('请填写完整的提案信息', 'error');
+                return;
+            }
+
+            if (appState.balance < 1000) {
+                showToast('需要至少1000 PoL才能创建提案', 'error');
+                return;
+            }
+
+            appState.balance -= 1000; // 扣除提案费用
+
+            // 创建新提案
+            const newProposal = {
+                id: appState.proposals.length + 1,
+                title,
+                support: 0,
+                against: 0,
+                abstain: 0,
+                status: 'active',
+                userVoted: false
+            };
+
+            appState.proposals.push(newProposal);
+
+            // 清空表单
+            document.getElementById('proposalTitle').value = '';
+            document.getElementById('proposalDesc').value = '';
+            document.getElementById('proposalAmount').value = '';
+
+            showToast('提案创建成功！等待社区投票', 'success');
+            updateUI();
+        }
+
+        // 跨链桥接
+        function updateTransferInfo() {
+            const amount = parseInt(document.getElementById('transferAmount').value) || 0;
+            const targetChain = document.getElementById('targetChain').value;
+            const bridgeFee = 5;
+            const networkFee = 0.001;
+
+            document.getElementById('transferAmountDisplay').textContent = `${amount} PoL`;
+            document.getElementById('transferFee').textContent = `${bridgeFee} PoL`;
+            document.getElementById('networkFee').textContent = `${networkFee} ETH`;
+            document.getElementById('transferTotal').textContent = `${amount + bridgeFee} PoL + ${networkFee} ETH`;
+        }
+
+        function initiateTransfer() {
+            if (!appState.isWalletConnected) {
+                showToast('请先连接钱包', 'error');
+                return;
+            }
+
+            const amount = parseInt(document.getElementById('transferAmount').value) || 0;
+            const recipient = document.getElementById('recipientAddress').value.trim();
+            const targetChain = document.getElementById('targetChain').value;
+
+            if (amount < 10) {
+                showToast('最小转账金额为10 PoL', 'error');
+                return;
+            }
+
+            if (!recipient) {
+                showToast('请输入接收地址', 'error');
+                return;
+            }
+
+            if (!recipient.startsWith('0x') || recipient.length !== 42) {
+                showToast('请输入有效的接收地址', 'error');
+                return;
+            }
+
+            const totalCost = amount + 5;
+            if (appState.balance < totalCost) {
+                showToast('余额不足', 'error');
+                return;
+            }
+
+            // 扣除费用
+            appState.balance -= totalCost;
+            appState.totalTransfers++;
+            appState.totalTransferred += amount;
+
+            // 添加到历史记录
+            const transfer = {
+                id: appState.transferHistory.length + 1,
+                from: 'Polkadot',
+                to: targetChain,
+                amount,
+                recipient,
+                status: 'processing',
+                timestamp: new Date()
+            };
+
+            appState.transferHistory.unshift(transfer);
+
+            // 清空表单
+            document.getElementById('transferAmount').value = '';
+            document.getElementById('recipientAddress').value = '';
+            updateTransferInfo();
+
+            showToast('跨链转账已发起，正在处理中...', 'success');
+            updateUI();
+            updateTransferHistory();
+
+            // 模拟转账完成
+            setTimeout(() => {
+                transfer.status = 'completed';
+                updateTransferHistory();
+                showToast('跨链转账已完成！', 'success');
+            }, 10000);
+        }
+
+        function updateTransferHistory() {
+            const historyContainer = document.getElementById('transferHistory');
+
+            if (appState.transferHistory.length === 0) {
+                historyContainer.innerHTML = `
+                    <div class="text-center text-gray-400 py-8">
+                        <i class="fas fa-history text-4xl mb-3"></i>
+                        <p>暂无转账记录</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const chainIcons = {
+                ethereum: '🔷',
+                polygon: '🟣',
+                arbitrum: '🔵',
+                optimism: '🔴',
+                bsc: '🟡'
+            };
+
+            const statusColors = {
+                processing: 'yellow',
+                completed: 'green',
+                failed: 'red'
+            };
+
+            const statusText = {
+                processing: '处理中',
+                completed: '已完成',
+                failed: '失败'
+            };
+
+            historyContainer.innerHTML = appState.transferHistory.map(transfer => {
+                const icon = chainIcons[transfer.to] || '🔗';
+                const color = statusColors[transfer.status];
+                const status = statusText[transfer.status];
+                const time = new Date(transfer.timestamp).toLocaleString('zh-CN');
+
+                return `
+                    <div class="p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="font-medium">Polkadot → ${icon} ${transfer.to.charAt(0).toUpperCase() + transfer.to.slice(1)}</div>
+                                <div class="text-sm text-gray-400">${time}</div>
+                                <div class="text-xs text-gray-500 mt-1">接收方: ${transfer.recipient.substring(0, 10)}...${transfer.recipient.substring(34)}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-semibold text-${color}-400">${transfer.amount} PoL</div>
+                                <div class="text-xs bg-${color}-600/20 text-${color}-400 px-2 py-1 rounded mt-1">${status}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateMyNFTs() {
+            const nftContainer = document.getElementById('myNFTs');
+
+            if (appState.myNFTs.length === 0) {
+                nftContainer.innerHTML = `
+                    <div class="text-center text-gray-400 py-8 col-span-full">
+                        <i class="fas fa-image text-4xl mb-3"></i>
+                        <p>暂无成就 NFT，快去完成成就获取吧！</p>
+                    </div>
+                `;
+                return;
+            }
+
+            nftContainer.innerHTML = appState.myNFTs.map(nft => `
+                <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600 card-hover">
+                    <div class="aspect-square bg-gradient-to-br from-purple-600 to-pink-600 rounded-lg mb-3 flex items-center justify-center">
+                        <i class="fas fa-trophy text-4xl"></i>
+                    </div>
+                    <h4 class="font-semibold text-sm mb-1">${nft.name}</h4>
+                    <p class="text-xs text-gray-400 mb-2">获得于 ${new Date(nft.timestamp).toLocaleDateString('zh-CN')}</p>
+                    <div class="text-center">
+                        <span class="text-lg font-bold text-purple-400">${nft.reward} PoL</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // UI 更新
+        function updateUI() {
+            // 更新导航栏状态
+            document.getElementById('polBalance').textContent = appState.balance;
+            document.getElementById('achievementCount').textContent = appState.achievements.length;
+            document.getElementById('reputationScore').textContent = appState.reputationScore;
+            document.getElementById('communityRank').textContent = `#${appState.communityRank}`;
+            document.getElementById('governancePower').textContent = `${appState.governancePower}%`;
+
+            // 更新仪表板
+            document.getElementById('totalContributions').textContent = appState.contributions.length;
+            document.getElementById('totalInfluence').textContent = appState.totalInfluence;
+
+            // 更新成就统计
+            const stats = calculateAchievementStats();
+            document.getElementById('totalAchievements').textContent = stats.total;
+            document.getElementById('rareAchievements').textContent = stats.rare;
+            document.getElementById('epicAchievements').textContent = stats.epic;
+            document.getElementById('legendaryAchievements').textContent = stats.legendary;
+
+            // 更新治理统计
+            document.getElementById('totalProposals').textContent = appState.proposals.length;
+            document.getElementById('activeProposals').textContent = appState.proposals.filter(p => p.status === 'active').length;
+            document.getElementById('myVotes').textContent = appState.myVotes;
+            document.getElementById('governanceParticipation').textContent = `${Math.round((appState.myVotes / Math.max(1, appState.proposals.length)) * 100)}%`;
+
+            // 更新跨链统计
+            document.getElementById('totalTransfers').textContent = appState.totalTransfers;
+            document.getElementById('totalTransferred').textContent = appState.totalTransferred;
+
+            // 更新贡献类型卡片样式
+            updateContributionTypeCards();
+        }
+
+        function updateContributionTypeCards() {
+            document.querySelectorAll('.contribution-type-card').forEach(card => {
+                const radio = card.querySelector('input[type="radio"]');
+                if (radio.checked) {
+                    card.classList.add('border-purple-500', 'bg-purple-600/20');
+                } else {
+                    card.classList.remove('border-purple-500', 'bg-purple-600/20');
+                }
+            });
+        }
+
+        function calculateAchievementStats() {
+            const achievementRarity = {
+                1: 'common',    // 首次贡献
+                2: 'rare',      // 代码贡献者
+                3: 'epic',      // 影响力大师
+                4: 'legendary', // 社区传奇
+                5: 'rare',      // 教育导师
+                6: 'epic'       // 跨链大使
+            };
+
+            const stats = { total: 0, rare: 0, epic: 0, legendary: 0 };
+
+            appState.achievements.forEach(achievementId => {
+                const rarity = achievementRarity[achievementId];
+                if (rarity) {
+                    stats.total++;
+                    stats[rarity]++;
+                }
+            });
+
+            return stats;
+        }
+
+        // 工具函数
+        function simulateAsync(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+
+            const bgClass = type === 'success' ? 'bg-green-600' :
+                           type === 'error' ? 'bg-red-600' :
+                           type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600';
+
+            const icon = type === 'success' ? 'check-circle' :
+                        type === 'error' ? 'exclamation-circle' :
+                        type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+
+            const toastHTML = `
+                <div id="${toastId}" class="success-toast ${bgClass} text-white px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 min-w-[300px]">
+                    <i class="fas fa-${icon} text-xl"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+            setTimeout(() => {
+                const toast = document.getElementById(toastId);
+                if (toast) {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 3000);
+        }
+
+        // 加载用户数据（模拟）
+        function loadUserData() {
+            // 可以在这里加载之前的用户数据
+            updateUI();
+            updateAchievementProgress();
+        }
+
+        // 贡献类型选择事件
+        document.querySelectorAll('input[name="contributionType"]').forEach(radio => {
+            radio.addEventListener('change', updateContributionTypeCards);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof of Love - AI智能评审系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.7.1/dist/ethers.min.js"></script>
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .floating { animation: float 6s ease-in-out infinite; }
+        .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .ai-gradient {
+            background: linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .success-toast {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .loading-spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+
+        .ai-thinking {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ai-thinking::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .judgment-card {
+            background: linear-gradient(135deg, rgba(78, 205, 196, 0.1), rgba(69, 183, 209, 0.1));
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .score-circle {
+            position: relative;
+            width: 120px;
+            height: 120px;
+        }
+
+        .score-circle svg {
+            transform: rotate(-90deg);
+        }
+
+        .score-circle circle {
+            fill: none;
+            stroke-width: 8;
+        }
+
+        .score-circle .bg {
+            stroke: rgba(255,255,255,0.1);
+        }
+
+        .score-circle .progress {
+            stroke-dasharray: 314;
+            stroke-dashoffset: 314;
+            transition: stroke-dashoffset 1s ease;
+        }
+
+        .category-score {
+            transition: all 0.3s ease;
+        }
+
+        .category-score:hover {
+            transform: translateX(5px);
+        }
+
+        .ai-badge {
+            background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
+            animation: gradientShift 3s ease infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <!-- Background Effects -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 floating"></div>
+        <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 floating" style="animation-delay: 2s;"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 floating" style="animation-delay: 4s;"></div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Navigation -->
+    <nav class="relative z-10 bg-gray-900/80 backdrop-blur-md border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-heart text-white"></i>
+                    </div>
+                    <span class="text-xl font-bold">Proof of Love</span>
+                    <div class="ai-badge px-2 py-1 rounded-full text-xs font-bold">
+                        <i class="fas fa-robot mr-1"></i>AI评审
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-sm text-gray-400">
+                        <i class="fas fa-coins text-purple-400 mr-1"></i>
+                        <span id="polBalance">0</span> PoL
+                    </div>
+                    <div class="text-sm text-gray-400">
+                        <i class="fas fa-brain text-cyan-400 mr-1"></i>
+                        <span id="aiJudgments">0</span> AI评审
+                    </div>
+                    <button id="connectWallet" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-full transition">
+                        连接钱包
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="relative z-10 min-h-screen">
+        <!-- Hero Section -->
+        <section class="py-12 px-4">
+            <div class="max-w-7xl mx-auto text-center">
+                <h1 class="text-3xl font-bold mb-4">
+                    <span class="text-gradient">Proof of Love</span>
+                    <br>
+                    <span class="text-xl text-gray-300">AI智能贡献评审系统</span>
+                </h1>
+                <p class="text-base text-gray-300 mb-6">
+                    集成DeepSeek大模型，为您的贡献提供专业的AI评审和质量评估
+                </p>
+            </div>
+        </section>
+
+        <!-- AI Judge Status -->
+        <section class="px-4 pb-8">
+            <div class="max-w-7xl mx-auto">
+                <div class="bg-gradient-to-r from-cyan-600/20 to-teal-600/20 border border-cyan-500/30 rounded-2xl p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-cyan-500/20 rounded-xl flex items-center justify-center">
+                                <i class="fas fa-robot text-cyan-400 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-cyan-400">DeepSeek AI评审助手</h3>
+                                <p class="text-sm text-gray-400">基于深度学习的智能贡献质量评估系统</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-6">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-cyan-400" id="totalJudged">0</div>
+                                <div class="text-xs text-gray-400">总评审数</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-green-400" id="avgScore">0</div>
+                                <div class="text-xs text-gray-400">平均得分</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-purple-400" id="aiAccuracy">95%</div>
+                                <div class="text-xs text-gray-400">AI准确率</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contribution Submission with AI Judge -->
+        <section class="px-4 pb-16">
+            <div class="max-w-7xl mx-auto">
+                <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-8">
+                    <h2 class="text-2xl font-bold mb-6">
+                        <i class="fas fa-brain text-cyan-400 mr-2"></i>AI智能贡献提交
+                    </h2>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <!-- 左侧：贡献表单 -->
+                        <div class="lg:col-span-2">
+                            <div class="space-y-6">
+                                <!-- 贡献类型 -->
+                                <div>
+                                    <h3 class="text-lg font-semibold mb-4">选择贡献类型</h3>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <label class="contribution-type-card flex items-center p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition border-2 border-transparent hover:border-purple-500" data-type="education">
+                                            <input type="radio" name="contributionType" value="education" class="mr-3" checked>
+                                            <div>
+                                                <div class="font-medium">📚 教育内容</div>
+                                                <div class="text-xs text-gray-400">教程、文档、视频</div>
+                                            </div>
+                                        </label>
+                                        <label class="contribution-type-card flex items-center p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition border-2 border-transparent hover:border-purple-500" data-type="code">
+                                            <input type="radio" name="contributionType" value="code" class="mr-3">
+                                            <div>
+                                                <div class="font-medium">💻 代码贡献</div>
+                                                <div class="text-xs text-gray-400">PR、Bug修复、功能</div>
+                                            </div>
+                                        </label>
+                                        <label class="contribution-type-card flex items-center p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition border-2 border-transparent hover:border-purple-500" data-type="research">
+                                            <input type="radio" name="contributionType" value="research" class="mr-3">
+                                            <div>
+                                                <div class="font-medium">🔬 研究分析</div>
+                                                <div class="text-xs text-gray-400">深度分析、报告</div>
+                                            </div>
+                                        </label>
+                                        <label class="contribution-type-card flex items-center p-4 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition border-2 border-transparent hover:border-purple-500" data-type="community">
+                                            <input type="radio" name="contributionType" value="community" class="mr-3">
+                                            <div>
+                                                <div class="font-medium">👥 社区建设</div>
+                                                <div class="text-xs text-gray-400">组织、翻译、支持</div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- 贡献详情 -->
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-2">贡献标题 *</label>
+                                        <input type="text" id="contributionTitle" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="给你的贡献起个简洁明确的标题...">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium mb-2">详细描述 *</label>
+                                        <textarea id="contributionDesc" rows="6" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="详细描述你的贡献内容，包括：&#10;1. 具体做了什么&#10;2. 解决了什么问题&#10;3. 产生了什么影响&#10;4. 使用的技术和方法&#10;5. 预期的长期价值"></textarea>
+                                        <div class="text-xs text-gray-400 mt-1">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            详细描述有助于AI更准确地评估贡献质量
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium mb-2">技术栈 / 工具</label>
+                                        <input type="text" id="techStack" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="例如：React, Solidity, Rust, Polkadot.js...">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium mb-2">相关链接</label>
+                                        <input type="text" id="contributionLink" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white" placeholder="GitHub链接、文档链接、演示地址等...">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-medium mb-2">预期影响 *</label>
+                                        <select id="expectedImpact" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white">
+                                            <option value="">请选择预期影响级别</option>
+                                            <option value="personal">个人学习成长</option>
+                                            <option value="team">团队/小范围影响</option>
+                                            <option value="community">社区层面影响</option>
+                                            <option value="ecosystem">生态系统影响</option>
+                                            <option value="industry">行业级影响</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- AI评审选项 -->
+                                <div class="bg-cyan-600/10 border border-cyan-500/30 rounded-lg p-4">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <h4 class="font-semibold text-cyan-400">
+                                            <i class="fas fa-robot mr-2"></i>AI智能评审
+                                        </h4>
+                                        <label class="flex items-center">
+                                            <input type="checkbox" id="enableAIJudge" checked class="mr-2">
+                                            <span class="text-sm">启用AI评审</span>
+                                        </label>
+                                    </div>
+                                    <p class="text-sm text-gray-300">
+                                        AI将从技术质量、创新性、实用价值、社区影响等多个维度对您的贡献进行专业评估，并提供改进建议。
+                                    </p>
+                                </div>
+
+                                <button onclick="submitWithAIJudge()" class="w-full px-6 py-3 bg-gradient-to-r from-cyan-600 to-teal-600 rounded-full font-semibold hover:from-cyan-700 hover:to-teal-700 transition transform hover:scale-105">
+                                    <i class="fas fa-robot mr-2"></i>提交并请求AI评审
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 右侧：AI评审结果 -->
+                        <div class="lg:col-span-1">
+                            <div id="aiJudgeResult" class="judgment-card rounded-lg p-6 min-h-[400px]">
+                                <h3 class="text-lg font-semibold mb-4 text-cyan-400">
+                                    <i class="fas fa-brain mr-2"></i>AI评审结果
+                                </h3>
+                                <div id="judgePlaceholder" class="text-center py-12">
+                                    <i class="fas fa-robot text-6xl text-gray-600 mb-4"></i>
+                                    <p class="text-gray-400">提交贡献后，AI将在这里显示详细评估结果</p>
+                                </div>
+                                <div id="judgeContent" class="hidden">
+                                    <!-- AI评审结果将在这里显示 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- AI评审历史 -->
+        <section class="px-4 pb-16">
+            <div class="max-w-7xl mx-auto">
+                <div class="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-8">
+                    <h2 class="text-2xl font-bold mb-6">
+                        <i class="fas fa-history text-cyan-400 mr-2"></i>AI评审历史
+                    </h2>
+                    <div id="judgeHistory" class="space-y-4">
+                        <div class="text-center text-gray-400 py-8">
+                            <i class="fas fa-inbox text-4xl mb-3"></i>
+                            <p>暂无AI评审记录</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // DeepSeek API配置
+        const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+        const DEEPSEEK_API_KEY = 'sk-d4d97de22baa432d8046da9cc9b483c3';
+
+        // 全局状态
+        const appState = {
+            isWalletConnected: false,
+            balance: 0,
+            contributions: [],
+            aiJudgments: [],
+            totalJudged: 0,
+            avgScore: 0
+        };
+
+        // 贡献类型中英文映射
+        const contributionTypes = {
+            education: '教育内容',
+            code: '代码贡献',
+            research: '研究分析',
+            community: '社区建设'
+        };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+        });
+
+        function initializeApp() {
+            setupEventListeners();
+            updateUI();
+        }
+
+        function setupEventListeners() {
+            document.getElementById('connectWallet').addEventListener('click', toggleWallet);
+            document.querySelectorAll('input[name="contributionType"]').forEach(radio => {
+                radio.addEventListener('change', updateContributionTypeCards);
+            });
+            updateContributionTypeCards();
+        }
+
+        // 钱包连接
+        async function toggleWallet() {
+            const btn = document.getElementById('connectWallet');
+
+            if (!appState.isWalletConnected) {
+                btn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>连接中...';
+                btn.disabled = true;
+
+                await simulateAsync(2000);
+
+                appState.isWalletConnected = true;
+                appState.balance = Math.floor(Math.random() * 2000) + 500;
+                appState.userAddress = '0x' + Math.random().toString(16).substr(2, 8) + '...';
+
+                btn.innerHTML = `<i class="fas fa-wallet mr-2"></i>${appState.userAddress}`;
+                btn.disabled = false;
+                btn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                btn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+                showToast('钱包连接成功！', 'success');
+                updateUI();
+            } else {
+                appState.isWalletConnected = false;
+                appState.balance = 0;
+
+                btn.innerHTML = '连接钱包';
+                btn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                btn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+
+                showToast('钱包已断开连接', 'info');
+                updateUI();
+            }
+        }
+
+        // 更新贡献类型卡片样式
+        function updateContributionTypeCards() {
+            document.querySelectorAll('.contribution-type-card').forEach(card => {
+                const radio = card.querySelector('input[type="radio"]');
+                if (radio.checked) {
+                    card.classList.add('border-purple-500', 'bg-purple-600/20');
+                } else {
+                    card.classList.remove('border-purple-500', 'bg-purple-600/20');
+                }
+            });
+        }
+
+        // 提交贡献并请求AI评审
+        async function submitWithAIJudge() {
+            if (!appState.isWalletConnected) {
+                showToast('请先连接钱包', 'error');
+                return;
+            }
+
+            const enableAI = document.getElementById('enableAIJudge').checked;
+            const title = document.getElementById('contributionTitle').value.trim();
+            const desc = document.getElementById('contributionDesc').value.trim();
+            const techStack = document.getElementById('techStack').value.trim();
+            const link = document.getElementById('contributionLink').value.trim();
+            const impact = document.getElementById('expectedImpact').value;
+            const type = document.querySelector('input[name="contributionType"]:checked').value;
+
+            // 表单验证
+            if (!title || !desc || !impact) {
+                showToast('请填写所有必填字段', 'error');
+                return;
+            }
+
+            if (desc.length < 50) {
+                showToast('贡献描述至少需要50个字符', 'error');
+                return;
+            }
+
+            // 显示AI思考状态
+            if (enableAI) {
+                showAIThinking();
+            }
+
+            try {
+                let aiResult = null;
+                if (enableAI) {
+                    aiResult = await callDeepSeekAI({
+                        title,
+                        description: desc,
+                        type: contributionTypes[type],
+                        techStack,
+                        link,
+                        expectedImpact: impact
+                    });
+                }
+
+                // 保存贡献记录
+                const contribution = {
+                    id: Date.now(),
+                    title,
+                    description: desc,
+                    type,
+                    techStack,
+                    link,
+                    expectedImpact: impact,
+                    timestamp: new Date(),
+                    aiResult,
+                    status: enableAI ? 'ai_judged' : 'pending'
+                };
+
+                appState.contributions.push(contribution);
+                if (aiResult) {
+                    appState.aiJudgments.push({
+                        contributionId: contribution.id,
+                        ...aiResult,
+                        timestamp: new Date()
+                    });
+                    appState.totalJudged++;
+                    updateAvgScore();
+                }
+
+                // 更新UI
+                if (enableAI && aiResult) {
+                    displayAIResult(aiResult);
+                    calculateAndAwardTokens(aiResult.score);
+                    addToJudgeHistory(contribution, aiResult);
+                } else {
+                    showPendingResult();
+                    // 基础奖励
+                    const baseReward = Math.floor(Math.random() * 200) + 100;
+                    appState.balance += baseReward;
+                    showToast(`贡献提交成功！获得基础奖励 ${baseReward} PoL`, 'success');
+                }
+
+                updateUI();
+                clearForm();
+
+            } catch (error) {
+                console.error('AI评审失败:', error);
+                showToast('AI评审服务暂时不可用，请稍后重试', 'error');
+                showJudgeError();
+            }
+        }
+
+        // 调用DeepSeek API
+        async function callDeepSeekAI(contribution) {
+            const prompt = `请作为专业的区块链和开源社区贡献评审专家，对以下贡献进行全面评估：
+
+**贡献信息：**
+- 标题：${contribution.title}
+- 类型：${contribution.type}
+- 技术栈：${contribution.techStack || '未指定'}
+- 预期影响：${contribution.expectedImpact}
+- 相关链接：${contribution.link || '无'}
+
+**详细描述：**
+${contribution.description}
+
+请从以下维度进行评分（0-100分）：
+1. 技术质量 - 代码/内容的技术水平、规范性、最佳实践
+2. 创新性 - 是否有独特的思路或解决方案
+3. 实用价值 - 实际应用价值和解决问题的能力
+4. 社区影响 - 对社区和生态系统的积极影响
+5. 完整性 - 贡献的完整度和可维护性
+
+请以JSON格式返回评估结果：
+{
+  "overall_score": 总分(0-100),
+  "dimensions": {
+    "technical_quality": 分数,
+    "innovation": 分数,
+    "practical_value": 分数,
+    "community_impact": 分数,
+    "completeness": 分数
+  },
+  "strengths": ["优点1", "优点2", "优点3"],
+  "improvements": ["改进建议1", "改进建议2"],
+  "summary": "总体评价和建议",
+  "recommended_tokens": 建议的PoL代币奖励数量(0-1000)
+}`;
+
+            const response = await fetch(DEEPSEEK_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: 'deepseek-chat',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: '你是一个专业的区块链和开源社区贡献评审专家，能够客观、公正地评估技术贡献的质量和价值。请始终以JSON格式返回评估结果。'
+                        },
+                        {
+                            role: 'user',
+                            content: prompt
+                        }
+                    ],
+                    temperature: 0.3,
+                    max_tokens: 1500
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`AI API调用失败: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const content = data.choices[0].message.content;
+
+            // 尝试解析JSON
+            try {
+                const jsonMatch = content.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    return JSON.parse(jsonMatch[0]);
+                } else {
+                    throw new Error('无法解析AI响应');
+                }
+            } catch (parseError) {
+                console.error('JSON解析错误:', parseError);
+                // 返回默认评分
+                return getDefaultScore();
+            }
+        }
+
+        // 默认评分（当AI解析失败时）
+        function getDefaultScore() {
+            return {
+                overall_score: 75,
+                dimensions: {
+                    technical_quality: 75,
+                    innovation: 70,
+                    practical_value: 75,
+                    community_impact: 80,
+                    completeness: 75
+                },
+                strengths: ['贡献内容完整', '描述详细清晰'],
+                improvements: ['建议增加更多技术细节'],
+                summary: 'AI解析失败，使用默认评分。建议手动审核。',
+                recommended_tokens: 300
+            };
+        }
+
+        // 显示AI思考状态
+        function showAIThinking() {
+            const placeholder = document.getElementById('judgePlaceholder');
+            const content = document.getElementById('judgeContent');
+
+            placeholder.innerHTML = `
+                <div class="ai-thinking">
+                    <div class="flex flex-col items-center">
+                        <div class="loading-spinner mb-4"></div>
+                        <p class="text-cyan-400 font-semibold mb-2">AI正在评审中...</p>
+                        <p class="text-sm text-gray-400">分析贡献质量、技术水平和社区影响</p>
+                        <div class="mt-4 space-y-2 text-left w-full">
+                            <div class="text-xs text-gray-500">✓ 技术质量评估</div>
+                            <div class="text-xs text-gray-500">✓ 创新性分析</div>
+                            <div class="text-xs text-gray-500">✓ 实用价值判断</div>
+                            <div class="text-xs text-gray-500">✓ 社区影响评估</div>
+                            <div class="text-xs text-gray-500">◐ 生成最终报告...</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            placeholder.classList.remove('hidden');
+            content.classList.add('hidden');
+        }
+
+        // 显示AI评审结果
+        function displayAIResult(result) {
+            const placeholder = document.getElementById('judgePlaceholder');
+            const content = document.getElementById('judgeContent');
+
+            placeholder.classList.add('hidden');
+            content.classList.remove('hidden');
+
+            const scoreColor = result.overall_score >= 90 ? 'text-green-400' :
+                              result.overall_score >= 70 ? 'text-blue-400' :
+                              result.overall_score >= 50 ? 'text-yellow-400' : 'text-red-400';
+
+            content.innerHTML = `
+                <div class="space-y-6">
+                    <!-- 总分显示 -->
+                    <div class="text-center">
+                        <div class="score-circle mx-auto mb-4">
+                            <svg width="120" height="120">
+                                <circle cx="60" cy="60" r="50" class="bg"></circle>
+                                <circle cx="60" cy="60" r="50" class="progress"
+                                        style="stroke: ${result.overall_score >= 90 ? '#10b981' : result.overall_score >= 70 ? '#3b82f6' : result.overall_score >= 50 ? '#eab308' : '#ef4444'}; stroke-dashoffset: ${314 - (result.overall_score / 100) * 314}"></circle>
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="text-center">
+                                    <div class="text-3xl font-bold ${scoreColor}">${result.overall_score}</div>
+                                    <div class="text-xs text-gray-400">总分</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 分项评分 -->
+                    <div class="space-y-3">
+                        <h4 class="font-semibold text-cyan-400">分项评分</h4>
+                        ${Object.entries(result.dimensions).map(([key, value]) => {
+                            const labels = {
+                                technical_quality: '技术质量',
+                                innovation: '创新性',
+                                practical_value: '实用价值',
+                                community_impact: '社区影响',
+                                completeness: '完整性'
+                            };
+                            return `
+                                <div class="category-score flex items-center justify-between">
+                                    <span class="text-sm">${labels[key]}</span>
+                                    <div class="flex items-center space-x-2">
+                                        <div class="w-24 bg-gray-700 rounded-full h-2">
+                                            <div class="bg-gradient-to-r from-cyan-400 to-teal-400 h-2 rounded-full" style="width: ${value}%"></div>
+                                        </div>
+                                        <span class="text-sm font-semibold w-10 text-right">${value}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <!-- 优点 -->
+                    <div>
+                        <h4 class="font-semibold text-green-400 mb-2">
+                            <i class="fas fa-thumbs-up mr-1"></i>优点
+                        </h4>
+                        <ul class="space-y-1">
+                            ${result.strengths.map(strength => `
+                                <li class="text-sm text-gray-300 flex items-start">
+                                    <i class="fas fa-check text-green-400 mr-2 mt-0.5"></i>
+                                    <span>${strength}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+
+                    <!-- 改进建议 -->
+                    <div>
+                        <h4 class="font-semibold text-yellow-400 mb-2">
+                            <i class="fas fa-lightbulb mr-1"></i>改进建议
+                        </h4>
+                        <ul class="space-y-1">
+                            ${result.improvements.map(improvement => `
+                                <li class="text-sm text-gray-300 flex items-start">
+                                    <i class="fas fa-arrow-right text-yellow-400 mr-2 mt-0.5"></i>
+                                    <span>${improvement}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+
+                    <!-- 总结 -->
+                    <div>
+                        <h4 class="font-semibold text-cyan-400 mb-2">
+                            <i class="fas fa-clipboard-check mr-1"></i>总体评价
+                        </h4>
+                        <p class="text-sm text-gray-300">${result.summary}</p>
+                    </div>
+
+                    <!-- 建议奖励 -->
+                    <div class="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500/30 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-semibold text-purple-400">AI建议奖励</span>
+                            <span class="text-xl font-bold text-purple-400">${result.recommended_tokens} PoL</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 显示待评审状态
+        function showPendingResult() {
+            const placeholder = document.getElementById('judgePlaceholder');
+            const content = document.getElementById('judgeContent');
+
+            placeholder.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-clock text-4xl text-yellow-400 mb-3"></i>
+                    <p class="text-yellow-400 font-semibold mb-2">等待社区评审</p>
+                    <p class="text-sm text-gray-400">您的贡献已提交，等待社区成员评审</p>
+                </div>
+            `;
+            placeholder.classList.remove('hidden');
+            content.classList.add('hidden');
+        }
+
+        // 显示评审错误
+        function showJudgeError() {
+            const placeholder = document.getElementById('judgePlaceholder');
+            const content = document.getElementById('judgeContent');
+
+            placeholder.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-exclamation-triangle text-4xl text-red-400 mb-3"></i>
+                    <p class="text-red-400 font-semibold mb-2">AI评审失败</p>
+                    <p class="text-sm text-gray-400">服务暂时不可用，请稍后重试</p>
+                </div>
+            `;
+            placeholder.classList.remove('hidden');
+            content.classList.add('hidden');
+        }
+
+        // 计算并发放代币奖励
+        function calculateAndAwardTokens(score) {
+            let tokens = 0;
+
+            if (score >= 90) {
+                tokens = Math.floor(Math.random() * 200) + 400; // 400-600
+            } else if (score >= 70) {
+                tokens = Math.floor(Math.random() * 150) + 250; // 250-400
+            } else if (score >= 50) {
+                tokens = Math.floor(Math.random() * 100) + 150; // 150-250
+            } else {
+                tokens = Math.floor(Math.random() * 50) + 50; // 50-100
+            }
+
+            appState.balance += tokens;
+            showToast(`AI评审完成！获得 ${tokens} PoL 代币奖励`, 'success');
+        }
+
+        // 添加到评审历史
+        function addToJudgeHistory(contribution, aiResult) {
+            const historyContainer = document.getElementById('judgeHistory');
+
+            if (appState.aiJudgments.length === 1) {
+                historyContainer.innerHTML = '';
+            }
+
+            const scoreColor = aiResult.overall_score >= 90 ? 'green' :
+                              aiResult.overall_score >= 70 ? 'blue' :
+                              aiResult.overall_score >= 50 ? 'yellow' : 'red';
+
+            const historyItem = `
+                <div class="p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h4 class="font-medium">${contribution.title}</h4>
+                            <p class="text-xs text-gray-400">${new Date().toLocaleString('zh-CN')}</p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-bold text-${scoreColor}-400">${aiResult.overall_score}分</div>
+                            <div class="text-xs text-gray-400">${contributionTypes[contribution.type]}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-gray-400">AI评审ID: ${contribution.id}</span>
+                        <button onclick="viewJudgeDetail(${contribution.id})" class="text-xs text-cyan-400 hover:text-cyan-300">
+                            查看详情 →
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            historyContainer.insertAdjacentHTML('afterbegin', historyItem);
+        }
+
+        // 查看评审详情
+        function viewJudgeDetail(contributionId) {
+            const contribution = appState.contributions.find(c => c.id === contributionId);
+            if (contribution && contribution.aiResult) {
+                displayAIResult(contribution.aiResult);
+                document.getElementById('aiJudgeResult').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        // 更新平均分
+        function updateAvgScore() {
+            if (appState.aiJudgments.length === 0) {
+                appState.avgScore = 0;
+                return;
+            }
+
+            const totalScore = appState.aiJudgments.reduce((sum, judge) => sum + judge.overall_score, 0);
+            appState.avgScore = Math.round(totalScore / appState.aiJudgments.length);
+        }
+
+        // 清空表单
+        function clearForm() {
+            document.getElementById('contributionTitle').value = '';
+            document.getElementById('contributionDesc').value = '';
+            document.getElementById('techStack').value = '';
+            document.getElementById('contributionLink').value = '';
+            document.getElementById('expectedImpact').value = '';
+            document.querySelector('input[name="contributionType"][value="education"]').checked = true;
+            updateContributionTypeCards();
+        }
+
+        // UI更新
+        function updateUI() {
+            document.getElementById('polBalance').textContent = appState.balance;
+            document.getElementById('aiJudgments').textContent = appState.aiJudgments.length;
+            document.getElementById('totalJudged').textContent = appState.totalJudged;
+            document.getElementById('avgScore').textContent = appState.avgScore;
+        }
+
+        // 工具函数
+        function simulateAsync(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+
+            const bgClass = type === 'success' ? 'bg-green-600' :
+                           type === 'error' ? 'bg-red-600' :
+                           type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600';
+
+            const icon = type === 'success' ? 'check-circle' :
+                        type === 'error' ? 'exclamation-circle' :
+                        type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+
+            const toastHTML = `
+                <div id="${toastId}" class="success-toast ${bgClass} text-white px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 min-w-[300px]">
+                    <i class="fas fa-${icon} text-xl"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+            setTimeout(() => {
+                const toast = document.getElementById(toastId);
+                if (toast) {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

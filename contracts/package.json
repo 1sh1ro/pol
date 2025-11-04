@@ -1,0 +1,22 @@
+{
+  "name": "proof-of-love-contracts",
+  "version": "1.0.0",
+  "description": "Proof of Love Platform Smart Contracts",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "test:coverage": "forge coverage",
+    "deploy:local": "forge script script/Deploy.s.sol --rpc-url localhost --broadcast",
+    "deploy:asset-hub": "forge script script/Deploy.s.sol --rpc-url asset_hub --broadcast",
+    "verify": "forge verify-contract",
+    "node": "anvil --fork-url asset_hub",
+    "clean": "forge clean"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "foundry": "latest"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts-upgradeable": "^5.0.0"
+  }
+}
